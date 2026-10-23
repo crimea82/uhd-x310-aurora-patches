@@ -1,0 +1,325 @@
+From f3de4598a48284f66bc1eec94645dbe6a628645a Mon Sep 17 00:00:00 2001
+From: yuriy <crimea82@protonmail.com>
+Date: Sun, 3 May 2026 16:25:57 -0400
+Subject: [PATCH 1/3] Modifications to be able to build an OOT Aurora block for
+ X310
+
+---
+ fpga/usrp3/tools/make/viv_design_builder.mak  |  4 +-
+ fpga/usrp3/top/x300/Makefile                  |  6 +++
+ fpga/usrp3/top/x300/Makefile.x300.inc         |  8 ++++
+ fpga/usrp3/top/x300/bus_int.v                 | 39 ++++++++++++++++++-
+ fpga/usrp3/top/x300/x300.v                    | 35 +++++++++++++++++
+ fpga/usrp3/top/x300/x300_core.v               | 23 +++++++++++
+ host/include/uhd/rfnoc/core/io_signatures.yml | 30 ++++++++++++++
+ host/include/uhd/rfnoc/core/x310_bsp.yml      | 12 ++++++
+ host/utils/rfnoc_image_builder.py             |  2 +-
+ 9 files changed, 156 insertions(+), 3 deletions(-)
+
+diff --git a/fpga/usrp3/tools/make/viv_design_builder.mak b/fpga/usrp3/tools/make/viv_design_builder.mak
+index 04fe00e46..1f9692bfb 100644
+--- a/fpga/usrp3/tools/make/viv_design_builder.mak
++++ b/fpga/usrp3/tools/make/viv_design_builder.mak
+@@ -58,7 +58,9 @@ CHECK_VIVADO_DESIGN = \
+ 	export VIV_MODE=$(VIVADO_MODE); \
+ 	export VIV_DESIGN_SRCS=$(call RESOLVE_PATHS,$(call uniq,$(DESIGN_SRCS))); \
+ 	export VIV_OOT_SRCS_FILE=$(OOT_SRCS_FILE); \
+-	export VIV_VERILOG_DEFS="$(VERILOG_DEFS) UHD_FPGA_DIR=$(BASE_DIR)../../"; \
++	export VIV_VERILOG_DEFS="$(VERILOG_DEFS) UHD_FPGA_DIR=$(abspath $(BASE_DIR)/../..)"; \
++	export VIV_PROJECT=0; \
++	export VIV_SECURE_KEY=; \
+ 	cd $(BUILD_DIR); \
+ 	$(TOOLS_DIR)/scripts/launch_vivado.py --parse-config $(TOOLS_DIR)/scripts/check_config.json -mode $(VIVADO_MODE) -source $(call RESOLVE_PATH,$(1)) -log build.log -journal $(2).jou
+ 
+diff --git a/fpga/usrp3/top/x300/Makefile b/fpga/usrp3/top/x300/Makefile
+index 7064dd35e..dbf767395 100644
+--- a/fpga/usrp3/top/x300/Makefile
++++ b/fpga/usrp3/top/x300/Makefile
+@@ -42,6 +42,8 @@ HG_DEFS=BUILD_1G=1 BUILD_10G=1 SFP0_1GBE=1 SFP1_10GBE=1 $(OPTIONS) BUILD_SEED=$(
+ XG_DEFS=BUILD_10G=1 SFP0_10GBE=1 SFP1_10GBE=1 $(OPTIONS) BUILD_SEED=$(BUILD_SEED)
+ HA_DEFS=BUILD_1G=1 BUILD_AURORA=1 SFP0_1GBE=1 SFP1_AURORA=1 $(OPTIONS) BUILD_SEED=$(BUILD_SEED)
+ XA_DEFS=BUILD_10G=1 BUILD_AURORA=1 SFP0_10GBE=1 SFP1_AURORA=1 $(OPTIONS) BUILD_SEED=$(BUILD_SEED)
++# RFNoC OOT Aurora: SFP0 driven by rfnoc_block_aurora_x310 (GT PHY inside image core)
++AA_DEFS=BUILD_1G=1 BUILD_RFNOC_AURORA=1 SFP0_RFNOC_AURORA=1 SFP1_1GBE=1 $(OPTIONS) BUILD_SEED=$(BUILD_SEED)
+ 
+ # Set build option (check RTL, run synthesis, or do a full build)
+ ifndef TARGET
+@@ -170,6 +172,10 @@ X300_XA: check-variables X300_IP
+ 	$(call vivado_build,X300,$(XA_DEFS) X300=1)
+ 	$(call post_build,X300,XA)
+ 
++##X310_AA:  RFNoC OOT Aurora block on SFP+ Port0, 1GigE on SFP+ Port1.
++X310_AA: check-variables X310_IP
++	$(call vivado_build,X310,$(AA_DEFS) X310=1)
++	$(call post_build,X310,AA)
+ 
+ 
+ ##
+diff --git a/fpga/usrp3/top/x300/Makefile.x300.inc b/fpga/usrp3/top/x300/Makefile.x300.inc
+index 207ab7769..a00a3828f 100644
+--- a/fpga/usrp3/top/x300/Makefile.x300.inc
++++ b/fpga/usrp3/top/x300/Makefile.x300.inc
+@@ -79,6 +79,14 @@ ifdef BUILD_AURORA
+ SFP_SERDES_SRCS += $(abspath x300_aurora.xdc) $(AURORA_PHY_SRCS) $(IP_AURORA_XCI_SRCS)
+ endif
+ 
++# RFNoC OOT aurora (rfnoc_block_aurora_x310): GT PHY lives inside the image
++# core block, so only the platform-level XDC (pin assignments + AUR_CLK
++# definition) is needed here.  The RTL/IP sources are pulled in via
++# RFNOC_OOT_MAKEFILE_SRCS by the rfnoc_image_builder.
++ifdef BUILD_RFNOC_AURORA
++SFP_SERDES_SRCS += $(abspath x300_aurora.xdc)
++endif
++
+ ifdef SFP0_10GBE
+ SFP_SERDES_SRCS += $(abspath x300_10ge_port0.xdc)
+ endif
+diff --git a/fpga/usrp3/top/x300/bus_int.v b/fpga/usrp3/top/x300/bus_int.v
+index cdaf891a4..bd0bb794b 100644
+--- a/fpga/usrp3/top/x300/bus_int.v
++++ b/fpga/usrp3/top/x300/bus_int.v
+@@ -93,6 +93,18 @@ module bus_int #(
+     input [15:0] sfp1_phy_status,
+     input [31:0] xadc_readback,
+ 
++`ifdef SFP0_RFNOC_AURORA
++    // SFP0 RFNoC Aurora raw GT pins — wired directly to rfnoc_image_core
++    input  wire  sfpp0_aurora_refclk_p,
++    input  wire  sfpp0_aurora_refclk_n,
++    input  wire  sfpp0_aurora_rx_p,
++    input  wire  sfpp0_aurora_rx_n,
++    output wire  sfpp0_aurora_tx_p,
++    output wire  sfpp0_aurora_tx_n,
++    output wire  sfpp0_aurora_link_up,
++    output wire  sfpp0_aurora_activity,
++`endif
++
+     //
+     // AXI4 (128b@250MHz) interface to DDR3 controller
+     //
+@@ -662,7 +674,21 @@ module bus_int #(
+    // ////////////////////////////////////////////////////////////////
+    // ETH interfaces
+ 
+-`ifdef SFP0_AURORA
++`ifdef SFP0_RFNOC_AURORA
++   // SFP0 is driven by rfnoc_block_aurora_x310 inside rfnoc_image_core.
++   // The eth0 transport path is unused; tie it off so the CHDR crossbar
++   // sees a quiet, always-ready slave and no spurious data.
++   assign e2v0_tdata  = 64'h0;
++   assign e2v0_tlast  = 1'b0;
++   assign e2v0_tvalid = 1'b0;
++   assign v2e0_tready = 1'b1;
++   assign sfp0_tx_tdata  = 64'h0;
++   assign sfp0_tx_tuser  = 4'h0;
++   assign sfp0_tx_tlast  = 1'b0;
++   assign sfp0_tx_tvalid = 1'b0;
++   assign sfp0_rx_tready = 1'b1;
++   assign {zpui0_tdata, zpui0_tlast, zpui0_tvalid, zpuo0_tready} = {64'h0, 1'b0, 1'b0, 1'b1};
++`elsif SFP0_AURORA
+    // The packet format over Aurora is CHDR so we don't need any special framing/deframing
+    assign {e2v0_tdata, e2v0_tlast, e2v0_tvalid, sfp0_rx_tready} = {sfp0_rx_tdata, sfp0_rx_tlast, sfp0_rx_tvalid, e2v0_tready};
+    assign {sfp0_tx_tdata, sfp0_tx_tlast, sfp0_tx_tvalid, v2e0_tready} = {v2e0_tdata, v2e0_tlast, v2e0_tvalid, sfp0_tx_tready};
+@@ -907,6 +933,17 @@ module bus_int #(
+     .fp_gpio_out             (user_fp_gpio_out),
+     .fp_gpio_ddr             (user_fp_gpio_ddr),
+     .fp_gpio_in              (user_fp_gpio_in)
++`ifdef SFP0_RFNOC_AURORA
++    // SFP0 RFNoC Aurora raw GT pins — routed to rfnoc_block_aurora_x310 PHY
++    ,.sfpp0_aurora_refclk_p  (sfpp0_aurora_refclk_p),
++    .sfpp0_aurora_refclk_n  (sfpp0_aurora_refclk_n),
++    .sfpp0_aurora_rx_p      (sfpp0_aurora_rx_p    ),
++    .sfpp0_aurora_rx_n      (sfpp0_aurora_rx_n    ),
++    .sfpp0_aurora_tx_p      (sfpp0_aurora_tx_p    ),
++    .sfpp0_aurora_tx_n      (sfpp0_aurora_tx_n    ),
++    .sfpp0_aurora_link_up   (sfpp0_aurora_link_up ),
++    .sfpp0_aurora_activity  (sfpp0_aurora_activity)
++`endif
+   );
+ 
+   //---------------------------------------------------------------------------
+diff --git a/fpga/usrp3/top/x300/x300.v b/fpga/usrp3/top/x300/x300.v
+index 1de9c0bbe..db05d8302 100644
+--- a/fpga/usrp3/top/x300/x300.v
++++ b/fpga/usrp3/top/x300/x300.v
+@@ -44,6 +44,9 @@ module x300
+ `ifdef BUILD_AURORA
+    `define BUILD_10G_OR_AURORA
+ `endif
++`ifdef BUILD_RFNOC_AURORA
++   `define BUILD_10G_OR_AURORA
++`endif
+ `ifdef BUILD_10G_OR_AURORA
+    input XG_CLK_p, input XG_CLK_n,
+ `endif
+@@ -959,6 +962,26 @@ module x300
+ 
+    wire        sfp0_link_up, sfp0_activity;
+ 
++`ifdef SFP0_RFNOC_AURORA
++   // SFP0 is used by the RFNoC OOT aurora block.  The GT PHY lives inside the
++   // rfnoc_image_core, so x300_sfpp_io_core is not instantiated.  The raw GT
++   // pins and the 10G reference clock are passed directly to x300_core (and
++   // hence to bus_int / rfnoc_image_core via the sfpp0_aurora_* ports).
++   // Tie off the ethernet data streams that x300_core expects on its sfp0_*
++   // ports so that bus_int internal logic remains unused but not floating.
++   assign sfp0_rx_tdata   = 64'h0;
++   assign sfp0_rx_tuser   = 4'h0;
++   assign sfp0_rx_tlast   = 1'b0;
++   assign sfp0_rx_tvalid  = 1'b0;
++   assign sfp0_phy_status = 16'h0;
++   assign sfp0_wb_dat_i   = 32'h0;
++   assign sfp0_wb_ack     = 1'b0;
++   assign sfp0_wb_int     = 1'b0;
++   assign SFPP0_TxDisable = 1'b0;  // keep transmitter enabled
++   // link_up / activity come back out of x300_core from rfnoc_image_core
++   assign LED_LINK2 = ~sfp0_link_up;
++   assign LED_ACT2  = ~sfp0_activity;
++`else
+    x300_sfpp_io_core #(
+ `ifdef SFP0_10GBE
+       .PROTOCOL("10GbE"),
+@@ -1019,6 +1042,7 @@ module x300
+    // LEDs are driven with negative logic.
+    assign LED_LINK2 = ~sfp0_link_up;
+    assign LED_ACT2  = ~sfp0_activity;
++`endif // SFP0_RFNOC_AURORA
+ 
+ 
+    //////////////////////////////////////////////////////////////////////
+@@ -1462,6 +1486,17 @@ module x300
+       .pcii_tlast                (pcii_tlast),
+       .pcii_tvalid               (pcii_tvalid),
+       .pcii_tready               (pcii_tready)
++`ifdef SFP0_RFNOC_AURORA
++      // SFP0 RFNoC Aurora raw GT pins (bypass x300_sfpp_io_core)
++      ,.sfpp0_aurora_refclk_p    (XG_CLK_p        ),
++      .sfpp0_aurora_refclk_n    (XG_CLK_n        ),
++      .sfpp0_aurora_rx_p        (SFP0_RX_p       ),
++      .sfpp0_aurora_rx_n        (SFP0_RX_n       ),
++      .sfpp0_aurora_tx_p        (SFP0_TX_p       ),
++      .sfpp0_aurora_tx_n        (SFP0_TX_n       ),
++      .sfpp0_aurora_link_up     (sfp0_link_up    ),
++      .sfpp0_aurora_activity    (sfp0_activity   )
++`endif
+    );
+ 
+    assign {DB_ADC_RESET, DB_DAC_RESET,DB0_DAC_ENABLE} = radio0_misc_out[2:0];
+diff --git a/fpga/usrp3/top/x300/x300_core.v b/fpga/usrp3/top/x300/x300_core.v
+index 211dc7196..9883cbabb 100644
+--- a/fpga/usrp3/top/x300/x300_core.v
++++ b/fpga/usrp3/top/x300/x300_core.v
+@@ -198,6 +198,18 @@ module x300_core #(
+    input         pcii_tvalid,
+    output        pcii_tready,
+ 
++`ifdef SFP0_RFNOC_AURORA
++   // SFP0 RFNoC Aurora raw GT pins passed through to bus_int/rfnoc_image_core
++   input  wire  sfpp0_aurora_refclk_p,
++   input  wire  sfpp0_aurora_refclk_n,
++   input  wire  sfpp0_aurora_rx_p,
++   input  wire  sfpp0_aurora_rx_n,
++   output wire  sfpp0_aurora_tx_p,
++   output wire  sfpp0_aurora_tx_n,
++   output wire  sfpp0_aurora_link_up,
++   output wire  sfpp0_aurora_activity,
++`endif
++
+    // Debug
+    output [1:0] led_misc,
+    output [31:0] debug0,
+@@ -407,6 +419,17 @@ module x300_core #(
+       .ddr3_axi_rready        ({s01_axi_rready, s00_axi_rready}),
+       // Debug
+       .debug0(debug0), .debug1(debug1), .debug2(debug2)
++`ifdef SFP0_RFNOC_AURORA
++      // SFP0 RFNoC Aurora raw GT pins (pass-through to rfnoc_image_core)
++      ,.sfpp0_aurora_refclk_p  (sfpp0_aurora_refclk_p),
++      .sfpp0_aurora_refclk_n  (sfpp0_aurora_refclk_n),
++      .sfpp0_aurora_rx_p      (sfpp0_aurora_rx_p    ),
++      .sfpp0_aurora_rx_n      (sfpp0_aurora_rx_n    ),
++      .sfpp0_aurora_tx_p      (sfpp0_aurora_tx_p    ),
++      .sfpp0_aurora_tx_n      (sfpp0_aurora_tx_n    ),
++      .sfpp0_aurora_link_up   (sfpp0_aurora_link_up ),
++      .sfpp0_aurora_activity  (sfpp0_aurora_activity)
++`endif
+    );
+ 
+    axi_intercon_2x64_128_bd_wrapper axi_intercon_2x64_128_bd_i (
+diff --git a/host/include/uhd/rfnoc/core/io_signatures.yml b/host/include/uhd/rfnoc/core/io_signatures.yml
+index 5c3db111a..3535e1179 100644
+--- a/host/include/uhd/rfnoc/core/io_signatures.yml
++++ b/host/include/uhd/rfnoc/core/io_signatures.yml
+@@ -257,3 +257,33 @@ radio_state:
+     width: "${parameters['num_ports']}"
+   - name: radio_state_tx_running
+     width: "${parameters['num_ports']}"
++
++x3xx_sfpp_aurora:
++  # X310 SFP+ Aurora physical interface.
++  # Connects the SFP+ GT pins and 10G reference clock to an aurora block.
++  type: master-slave
++  ports:
++  - name: refclk_p
++    type: to-master
++    width: 1
++  - name: refclk_n
++    type: to-master
++    width: 1
++  - name: tx_p
++    type: from-master
++    width: 1
++  - name: tx_n
++    type: from-master
++    width: 1
++  - name: rx_p
++    type: to-master
++    width: 1
++  - name: rx_n
++    type: to-master
++    width: 1
++  - name: link_up
++    type: from-master
++    width: 1
++  - name: activity
++    type: from-master
++    width: 1
+diff --git a/host/include/uhd/rfnoc/core/x310_bsp.yml b/host/include/uhd/rfnoc/core/x310_bsp.yml
+index 7ab82a046..68983f595 100644
+--- a/host/include/uhd/rfnoc/core/x310_bsp.yml
++++ b/host/include/uhd/rfnoc/core/x310_bsp.yml
+@@ -74,6 +74,18 @@ io_ports:
+       pattern: (.*)
+       repl: fp_\1
+     required: recommended
++  sfpp0:
++    type: x3xx_sfpp_aurora
++    drive: slave
++    rename:
++      pattern: (.*)
++      repl: sfpp0_aurora_\1
++  sfpp1:
++    type: x3xx_sfpp_aurora
++    drive: slave
++    rename:
++      pattern: (.*)
++      repl: sfpp1_aurora_\1
+ 
+ default_secure_image_core:
+     modules:
+diff --git a/host/utils/rfnoc_image_builder.py b/host/utils/rfnoc_image_builder.py
+index 932a01c5b..e4f2a8589 100755
+--- a/host/utils/rfnoc_image_builder.py
++++ b/host/utils/rfnoc_image_builder.py
+@@ -23,7 +23,7 @@ def get_valid_targets():
+         "N310": ["WX", "HG", "XG", "HA", "XA", "AA"],
+         "N300": ["WX", "HG", "XG", "HA", "XA", "AA"],
+         "N320": ["WX", "HG", "XG", "XQ", "AQ", "AA"],
+-        "X310": ["1G", "HG", "XG", "HA", "XA"],
++        "X310": ["1G", "HG", "XG", "HA", "XA", "AA"],
+         "X300": ["1G", "HG", "XG", "HA", "XA"],
+         "X410": [""],
+         "X440": [""],
+-- 
+2.34.1
+
