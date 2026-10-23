@@ -1,7 +1,7 @@
 From 96f39a3d173812c6970dcd9415a94867c77598bc Mon Sep 17 00:00:00 2001
 From: yuriy <crimea82@protonmail.com>
 Date: Fri, 23 Oct 2026 18:09:40 -0400
-Subject: [PATCH 4/5] fpga: x300: Update Vivado version to 2024.2 and fix
+Subject: [PATCH 4/6] fpga: x300: Update Vivado version to 2024.2 and fix
  case-sensitive grep
 
 viv_preamble.mak used 'grep Vivado' but Vivado 2024.2 changed the version

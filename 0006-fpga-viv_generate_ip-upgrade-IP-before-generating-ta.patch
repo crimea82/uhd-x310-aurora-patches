@@ -1,0 +1,30 @@
+From 30317af720b007ea0eff88cb281c67cddd8f603c Mon Sep 17 00:00:00 2001
+From: yuriy <crimea82@protonmail.com>
+Date: Fri, 23 Oct 2026 19:35:21 -0400
+Subject: [PATCH 6/6] fpga: viv_generate_ip: upgrade IP before generating
+ targets
+
+Vivado 2024.2 locks XCI files whose catalog version has changed since
+they were generated (e.g. from 2021.1). upgrade_ip unlocks them so that
+reset_target and generate_target succeed on a clean build.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+---
+ fpga/usrp3/tools/scripts/viv_generate_ip.tcl | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/fpga/usrp3/tools/scripts/viv_generate_ip.tcl b/fpga/usrp3/tools/scripts/viv_generate_ip.tcl
+index acd89ad0e..19681b58b 100644
+--- a/fpga/usrp3/tools/scripts/viv_generate_ip.tcl
++++ b/fpga/usrp3/tools/scripts/viv_generate_ip.tcl
+@@ -20,6 +20,7 @@ file delete -force "$xci_file.out"
+ create_project -part $part_name -in_memory -ip
+ set_property target_simulator XSim [current_project]
+ add_files -norecurse -force $xci_file
++upgrade_ip [get_ips $ip_name]
+ reset_target all [get_files $xci_file]
+ puts "BUILDER: Generating IP Target..."
+ generate_target all [get_files $xci_file]
+-- 
+2.34.1
+
