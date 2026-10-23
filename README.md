@@ -14,6 +14,10 @@ block for the X310. Ported from the X410 in-tree implementation.
   update Vivado version to 2024.2 and fix case-sensitive version string grep
 - `fpga/usrp3/lib/axi4s_sv/`: guard `$fatal` assertions in `initial` blocks with
   `synthesis translate_off/on` — Vivado 2024.2 synthesizes these where 2021.1 did not
+- `fpga/usrp3/tools/scripts/viv_generate_ip.tcl`: call `upgrade_ip` before
+  `generate_target` to unlock IPs built with an older Vivado catalog; use explicit
+  targets instead of `all` when `SYNTH_IP=0` to avoid triggering OOC synthesis
+  subprocesses for complex IPs (e.g. xfft) in Vivado 2024.2
 
 ## Usage
 
