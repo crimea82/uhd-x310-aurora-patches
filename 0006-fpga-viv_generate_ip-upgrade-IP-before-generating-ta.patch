@@ -1,8 +1,7 @@
 From 30317af720b007ea0eff88cb281c67cddd8f603c Mon Sep 17 00:00:00 2001
 From: yuriy <crimea82@protonmail.com>
 Date: Fri, 23 Oct 2026 19:35:21 -0400
-Subject: [PATCH 6/6] fpga: viv_generate_ip: upgrade IP before generating
- targets
+Subject: [PATCH] fpga: viv_generate_ip: upgrade IP before generating targets
 
 Vivado 2024.2 locks XCI files whose catalog version has changed since
 they were generated (e.g. from 2021.1). upgrade_ip unlocks them so that

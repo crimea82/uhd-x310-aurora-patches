@@ -1,0 +1,38 @@
+From 3bd52bdae92fbb36d6c6a22b6de6a7d1e2255b6c Mon Sep 17 00:00:00 2001
+From: yuriy <crimea82@protonmail.com>
+Date: Fri, 23 Oct 2026 19:51:59 -0400
+Subject: [PATCH] fpga: viv_generate_ip: skip OOC synthesis subprocess when
+ SYNTH_IP=0
+
+Vivado 2024.2 triggers an OOC synthesis subprocess for complex IPs
+(e.g. xfft/axi_fft) when generate_target all is used, even when the
+caller only needs stubs.  When SYNTH_IP=0 use explicit targets
+{instantiation_template simulation synthesis} to avoid this.  When
+SYNTH_IP=1 keep generate_target all followed by synth_ip as before.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+---
+ fpga/usrp3/tools/scripts/viv_generate_ip.tcl | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/fpga/usrp3/tools/scripts/viv_generate_ip.tcl b/fpga/usrp3/tools/scripts/viv_generate_ip.tcl
+index 19681b58b..ebdae314c 100644
+--- a/fpga/usrp3/tools/scripts/viv_generate_ip.tcl
++++ b/fpga/usrp3/tools/scripts/viv_generate_ip.tcl
+@@ -23,10 +23,12 @@ add_files -norecurse -force $xci_file
+ upgrade_ip [get_ips $ip_name]
+ reset_target all [get_files $xci_file]
+ puts "BUILDER: Generating IP Target..."
+-generate_target all [get_files $xci_file]
+ if [string match $synth_ip "1"] {
++    generate_target all [get_files $xci_file]
+     puts "BUILDER: Synthesizing IP Target..."
+     synth_ip [get_ips $ip_name]
++} else {
++    generate_target {instantiation_template simulation synthesis} [get_files $xci_file]
+ }
+ # Check for errors from the main IP generation before opening the example project
+ if { [get_msg_config -count -severity ERROR] > 0 } {
+-- 
+2.34.1
+
