@@ -1,4 +1,4 @@
-UHD_REPO    ?= git@gitlab.home.lan:yuriy/uhd.git
+UHD_REPO    ?= https://github.com/EttusResearch/uhd.git
 UHD_VERSION ?= v4.10.0.0
 BUILD_DIR   ?= uhd
 
