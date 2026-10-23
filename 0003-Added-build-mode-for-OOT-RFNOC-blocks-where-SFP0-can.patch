@@ -1,7 +1,7 @@
 From 4ee7676a387be057c1fb1f87eb6670a2b55c085d Mon Sep 17 00:00:00 2001
 From: yuriy <crimea82@protonmail.com>
 Date: Sun, 10 May 2026 15:44:43 -0400
-Subject: [PATCH 3/3] Added build mode for OOT RFNOC blocks where SFP0 can be
+Subject: [PATCH 3/5] Added build mode for OOT RFNOC blocks where SFP0 can be
  1GigE and SFP1 cab be Aurora
 
 ---

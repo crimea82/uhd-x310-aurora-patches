@@ -1,0 +1,44 @@
+From 96f39a3d173812c6970dcd9415a94867c77598bc Mon Sep 17 00:00:00 2001
+From: yuriy <crimea82@protonmail.com>
+Date: Fri, 23 Oct 2026 18:09:40 -0400
+Subject: [PATCH 4/5] fpga: x300: Update Vivado version to 2024.2 and fix
+ case-sensitive grep
+
+viv_preamble.mak used 'grep Vivado' but Vivado 2024.2 changed the version
+string from 'Vivado v2024.2' to 'vivado v2024.2' (lowercase). Use grep -i
+to match either case.
+---
+ fpga/usrp3/tools/make/viv_preamble.mak | 2 +-
+ fpga/usrp3/top/x300/setupenv.sh        | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/fpga/usrp3/tools/make/viv_preamble.mak b/fpga/usrp3/tools/make/viv_preamble.mak
+index f7b53bf39..1b2abbf0e 100644
+--- a/fpga/usrp3/tools/make/viv_preamble.mak
++++ b/fpga/usrp3/tools/make/viv_preamble.mak
+@@ -71,7 +71,7 @@ endif
+ 	@echo "BUILDER: Checking tools..."
+ 	@echo -n "* "; bash --version | grep bash || (echo "ERROR: Bash not found in environment. Please install it"; exit 1;)
+ 	@echo -n "* "; python3 --version || (echo "ERROR: Python not found in environment. Please install it"; exit 1;)
+-	@echo -n "* "; vivado -version 2>&1 | grep Vivado || (echo "ERROR: Vivado not found in environment. Please run setupenv.sh"; exit 1;)
++	@echo -n "* "; vivado -version 2>&1 | grep -i Vivado || (echo "ERROR: Vivado not found in environment. Please run setupenv.sh"; exit 1;)
+ 
+ # -------------------------------------------------------------------
+ # Intermediate build dirs 
+diff --git a/fpga/usrp3/top/x300/setupenv.sh b/fpga/usrp3/top/x300/setupenv.sh
+index bbf13aafd..f380adaac 100644
+--- a/fpga/usrp3/top/x300/setupenv.sh
++++ b/fpga/usrp3/top/x300/setupenv.sh
+@@ -1,7 +1,7 @@
+ #!/bin/bash
+ 
+-VIVADO_VER=2021.1
+-VIVADO_VER_FULL=2021.1_AR76780
++VIVADO_VER=2024.2
++VIVADO_VER_FULL=2024.2
+ DISPLAY_NAME="USRP-X3x0"
+ REPO_BASE_PATH=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+ 
+-- 
+2.34.1
+

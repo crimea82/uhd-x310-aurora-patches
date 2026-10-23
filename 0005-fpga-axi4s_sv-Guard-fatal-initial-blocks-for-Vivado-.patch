@@ -1,0 +1,98 @@
+From 2f1485e33c0deab512670d41fe84e8bd2db9bb1f Mon Sep 17 00:00:00 2001
+From: yuriy <crimea82@protonmail.com>
+Date: Fri, 23 Oct 2026 18:37:09 -0400
+Subject: [PATCH 5/5] fpga: axi4s_sv: Guard $fatal initial blocks for Vivado
+ 2024.2
+
+Vivado 2024.2 synthesizes $fatal assertions in initial blocks that
+2021.1 ignored, causing synthesis failures. Wrap the parameter-check
+initial blocks with synthesis translate_off/on directives.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+---
+ fpga/usrp3/lib/axi4s_sv/axi4s_add_bytes.sv    | 2 ++
+ fpga/usrp3/lib/axi4s_sv/axi4s_fifo.sv         | 2 ++
+ fpga/usrp3/lib/axi4s_sv/axi4s_packet_gate.sv  | 2 ++
+ fpga/usrp3/lib/axi4s_sv/axi4s_remove_bytes.sv | 2 ++
+ 4 files changed, 8 insertions(+)
+
+diff --git a/fpga/usrp3/lib/axi4s_sv/axi4s_add_bytes.sv b/fpga/usrp3/lib/axi4s_sv/axi4s_add_bytes.sv
+index 08fb86632..407dfeff7 100644
+--- a/fpga/usrp3/lib/axi4s_sv/axi4s_add_bytes.sv
++++ b/fpga/usrp3/lib/axi4s_sv/axi4s_add_bytes.sv
+@@ -57,6 +57,7 @@ module axi4s_add_bytes #(
+ 
+   `include "axi4s.vh"
+   // Parameter Checks
++  // synthesis translate_off
+   initial begin
+     assert (i.DATA_WIDTH == o.DATA_WIDTH) else
+       $fatal(1, "DATA_WIDTH mismatch");
+@@ -69,6 +70,7 @@ module axi4s_add_bytes #(
+     assert (ADD_START == 0) else
+       $fatal(1, "Only tested for ADD_START = 0");
+   end
++  // synthesis translate_on
+ 
+   AxiStreamPacketIf #(.DATA_WIDTH(i.DATA_WIDTH),.USER_WIDTH(i.USER_WIDTH),
+     .TKEEP(0),.MAX_PACKET_BYTES(i.MAX_PACKET_BYTES))
+diff --git a/fpga/usrp3/lib/axi4s_sv/axi4s_fifo.sv b/fpga/usrp3/lib/axi4s_sv/axi4s_fifo.sv
+index 3a434ceb0..e54462ca6 100644
+--- a/fpga/usrp3/lib/axi4s_sv/axi4s_fifo.sv
++++ b/fpga/usrp3/lib/axi4s_sv/axi4s_fifo.sv
+@@ -25,6 +25,7 @@ module axi4s_fifo #(
+   `include "axi4s.vh"
+ 
+   // Parameter Checks
++  // synthesis translate_off
+   initial begin
+     assert (i.DATA_WIDTH == o.DATA_WIDTH) else
+       $fatal(1, "DATA_WIDTH mismatch");
+@@ -39,6 +40,7 @@ module axi4s_fifo #(
+     assert (i.TLAST == o.TLAST) else
+       $fatal(1, "TLAST present mismatch");
+   end
++  // synthesis translate_on
+ 
+   AxiStreamPacketIf #(.DATA_WIDTH(i.DATA_WIDTH),.USER_WIDTH(i.USER_WIDTH),
+     .TDATA(i.TDATA),.TKEEP(i.TKEEP),.TUSER(i.TUSER),.TLAST(i.TLAST),
+diff --git a/fpga/usrp3/lib/axi4s_sv/axi4s_packet_gate.sv b/fpga/usrp3/lib/axi4s_sv/axi4s_packet_gate.sv
+index 54cd883c5..1351ee3ce 100644
+--- a/fpga/usrp3/lib/axi4s_sv/axi4s_packet_gate.sv
++++ b/fpga/usrp3/lib/axi4s_sv/axi4s_packet_gate.sv
+@@ -33,6 +33,7 @@ module axi4s_packet_gate #(
+   `include "axi4s.vh"
+ 
+   // Parameter Checks
++  // synthesis translate_off
+   initial begin
+     assert (i.DATA_WIDTH == o.DATA_WIDTH) else
+       $fatal(1, "DATA_WIDTH mismatch");
+@@ -49,6 +50,7 @@ module axi4s_packet_gate #(
+     assert (o.TLAST == 1) else
+       $fatal(1, "o.TLAST not present");
+   end
++  // synthesis translate_on
+ 
+   localparam WIDTH = i.DWIDTH + i.UWIDTH + i.KWIDTH;
+ 
+diff --git a/fpga/usrp3/lib/axi4s_sv/axi4s_remove_bytes.sv b/fpga/usrp3/lib/axi4s_sv/axi4s_remove_bytes.sv
+index 89dcbefdd..a5a69cdfb 100644
+--- a/fpga/usrp3/lib/axi4s_sv/axi4s_remove_bytes.sv
++++ b/fpga/usrp3/lib/axi4s_sv/axi4s_remove_bytes.sv
+@@ -73,10 +73,12 @@ module axi4s_remove_bytes #(
+   `include "axi4s.vh"
+ 
+   // Parameter Checks
++  // synthesis translate_off
+   initial begin
+     assert (i.DATA_WIDTH == o.DATA_WIDTH) else
+       $fatal(1, "DATA_WIDTH mismatch");
+   end
++  // synthesis translate_on
+ 
+   AxiStreamPacketIf #(.DATA_WIDTH(i.DATA_WIDTH),.USER_WIDTH(i.USER_WIDTH),
+     .TKEEP(0),.MAX_PACKET_BYTES(i.MAX_PACKET_BYTES))
+-- 
+2.34.1
+
