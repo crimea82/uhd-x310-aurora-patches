@@ -50,3 +50,34 @@ This installs the files that `rfnoc_image_builder` reads from the system path:
 > installed by `cmake --install`. They are used in-place from the source tree.
 > Pass `-F /path/to/uhd/fpga` to `rfnoc_image_builder` to pick them up — see the
 > rfnoc-oot-blocks patch repo for the full build command.
+
+## Network configuration
+
+The X310 uses Ethernet for its control plane — this is how UHD discovers the
+device, tunes the radio, streams samples, and loads firmware. In a standard
+image both SFP ports carry Ethernet, but in the Aurora builds one SFP port is
+consumed entirely by the Aurora serial link and is no longer usable as Ethernet.
+The host must connect to the remaining Ethernet port to reach the X310.
+
+The Aurora link itself carries RFNoC data between devices and has nothing to do
+with the host IP stack, but the host still needs an Ethernet path to control
+the X310 through UHD.
+
+The X310 stores a per-port IP address in EEPROM with factory defaults:
+
+- SFP0 (eth0): `192.168.10.2`
+- SFP1 (eth1): `192.168.20.2`
+
+**X310_AA** (Aurora on SFP0): SFP0 is taken by Aurora. Connect the host NIC
+to SFP1 and set the host address to `192.168.20.1/24`. UHD will reach the
+X310 at `192.168.20.2`.
+
+**X310_AA1** (Aurora on SFP1): SFP1 is taken by Aurora. Connect the host NIC
+to SFP0 and set the host address to `192.168.10.1/24`. UHD will reach the
+X310 at `192.168.10.2`.
+
+You can verify the stored IP or check the current firmware revision with:
+
+```bash
+uhd_image_loader --args="type=x300,addr=<current-ip>" --just-check-rev
+```
