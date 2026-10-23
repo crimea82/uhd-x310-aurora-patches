@@ -21,7 +21,7 @@ make clean    # remove the cloned source tree
 The source repo URL and version can be overridden:
 
 ```
-make UHD_REPO=git@gitlab.home.lan:yuriy/uhd.git
+make UHD_REPO=https://github.com/EttusResearch/uhd.git
 ```
 
 ## Building and installing patched UHD
