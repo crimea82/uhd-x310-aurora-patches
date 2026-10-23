@@ -10,6 +10,10 @@ block for the X310. Ported from the X410 in-tree implementation.
 - `host/include/uhd/rfnoc/core/io_signatures.yml`: adds `x3xx_sfpp_aurora` port type
 - `host/include/uhd/rfnoc/core/x310_bsp.yml`: exposes `sfpp0`/`sfpp1` aurora ports
 - `host/utils/rfnoc_image_builder.py`: minor fix required for the new targets
+- `fpga/usrp3/top/x300/setupenv.sh`, `fpga/usrp3/tools/make/viv_preamble.mak`:
+  update Vivado version to 2024.2 and fix case-sensitive version string grep
+- `fpga/usrp3/lib/axi4s_sv/`: guard `$fatal` assertions in `initial` blocks with
+  `synthesis translate_off/on` — Vivado 2024.2 synthesizes these where 2021.1 did not
 
 ## Usage
 
