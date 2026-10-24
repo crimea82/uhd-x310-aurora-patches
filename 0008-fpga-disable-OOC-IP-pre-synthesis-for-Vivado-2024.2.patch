@@ -1,0 +1,42 @@
+From 10099895d670b31053f4be95397a411a1e6661a8 Mon Sep 17 00:00:00 2001
+From: yuriy <crimea82@protonmail.com>
+Date: Fri, 23 Oct 2026 20:22:29 -0400
+Subject: [PATCH] fpga: disable OOC IP pre-synthesis for Vivado 2024.2
+
+Vivado 2024.2 OOC synthesis exits non-zero for many older IPs (xfft,
+cordic, complex_to_magphase, etc.) despite completing all synthesis
+phases with 0 errors and no written DCP.  The child process exit code
+propagates through the outer Vivado session, bypassing TCL-level catch,
+so viv_generate_ip.tcl never writes the output cookie file.
+
+Set SYNTH_IP=0 unconditionally in viv_ip_builder.mak.  IPs are still
+prepared via generate_target all (VHD stubs generated); the main design
+synthesis synthesizes them inline.  Build time increases but is correct.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+---
+ fpga/usrp3/tools/make/viv_ip_builder.mak | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/fpga/usrp3/tools/make/viv_ip_builder.mak b/fpga/usrp3/tools/make/viv_ip_builder.mak
+index 26e843c93..73e71546a 100644
+--- a/fpga/usrp3/tools/make/viv_ip_builder.mak
++++ b/fpga/usrp3/tools/make/viv_ip_builder.mak
+@@ -2,11 +2,10 @@
+ # Copyright 2014 Ettus Research
+ #
+ 
+-ifeq ($(SIMULATION),1)
++# Vivado 2024.2 OOC synthesis exits non-zero for many older IPs (e.g. xfft, cordic)
++# despite completing with 0 errors, causing the build to fail.  Disable pre-synthesis
++# globally; the main design synthesis synthesizes all IPs inline from VHD stubs.
+ SYNTH_IP=0
+-else
+-SYNTH_IP=1
+-endif
+ 
+ # -------------------------------------------------------------------
+ # Usage: BUILD_VIVADO_IP
+-- 
+2.34.1
+
