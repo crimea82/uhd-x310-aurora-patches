@@ -1,0 +1,36 @@
+From 747605ecf091d537141446475513f4268d91f7da Mon Sep 17 00:00:00 2001
+From: yuriy <crimea82@protonmail.com>
+Date: Fri, 23 Oct 2026 20:22:29 -0400
+Subject: [PATCH] fpga: axi_fft: skip OOC pre-synthesis for Vivado 2024.2
+
+Vivado 2024.2 OOC synthesis of xfft v9.1 (after upgrade_ip rev 6->13)
+exits non-zero despite completing all synthesis phases with 0 errors.
+The outer Vivado process propagates the child exit code, bypassing any
+TCL-level catch, so the build fails before the cookie file is written.
+
+Set SYNTH_IP := 0 for this target so generate_target runs (producing
+synth/axi_fft.vhd) but synth_ip is skipped.  The main design synthesis
+will synthesize xfft inline from the VHD stub.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+---
+ fpga/usrp3/lib/ip/axi_fft/Makefile.inc | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/fpga/usrp3/lib/ip/axi_fft/Makefile.inc b/fpga/usrp3/lib/ip/axi_fft/Makefile.inc
+index 67f0f83d3..041063388 100644
+--- a/fpga/usrp3/lib/ip/axi_fft/Makefile.inc
++++ b/fpga/usrp3/lib/ip/axi_fft/Makefile.inc
+@@ -17,5 +17,9 @@ synth/axi_fft.vhd \
+ $(LIB_IP_AXI_FFT_SRCS) $(LIB_IP_AXI_FFT_OUTS): LIB_IP_AXI_FFT_TRGT
+ 	@:
+ 
++# Vivado 2024.2 OOC synthesis of xfft v9.1 exits non-zero despite completing
++# successfully, preventing the cookie file from being written.  Skip pre-synthesis
++# for this IP; the main design synthesis will synthesize it inline from the VHD stub.
++LIB_IP_AXI_FFT_TRGT: SYNTH_IP := 0
+ LIB_IP_AXI_FFT_TRGT: $(LIB_IP_DIR)/axi_fft/axi_fft.xci
+ 	$(call BUILD_VIVADO_IP,axi_fft,$(ARCH),$(PART_ID),$(LIB_IP_DIR),$(IP_BUILD_DIR),0)
+-- 
+2.34.1
+
