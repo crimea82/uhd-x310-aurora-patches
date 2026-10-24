@@ -1,0 +1,66 @@
+From 9a3306cbdc8877f544a55ee6c7962c974c5b2a60 Mon Sep 17 00:00:00 2001
+From: yuriy <crimea82@protonmail.com>
+Date: Fri, 23 Oct 2026 21:09:44 -0400
+Subject: [PATCH] fpga: disable OOC synthesis via generate_synth_checkpoint
+ false
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Two Vivado 2024.2 issues fixed:
+
+1. viv_generate_ip.tcl: set generate_synth_checkpoint false on the IP
+   before generate_target all.  Without this, Vivado runs OOC synthesis
+   as part of generate_target for IPs with OOC configured (e.g.
+   complex_to_magphase), and exits non-zero despite completing with 0
+   errors—failing the IP build step.
+
+2. viv_utils.tcl: change generate_synth_checkpoint from true to false
+   for all IPs in the main design synthesis.  Clk_wiz IPs (bus_clk_gen,
+   radio_clk_gen, pcie_clk_gen) produce .v wrappers, not synth/*.vhd
+   stubs.  When those XCIs carry a "moved from original location" lock
+   and generate_synth_checkpoint is true but no DCP exists, Vivado fails
+   to find the module in synthesis.  Forcing false causes Vivado to use
+   inline synthesis from the IP's generated .v files instead.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+---
+ fpga/usrp3/tools/scripts/viv_generate_ip.tcl | 5 +++++
+ fpga/usrp3/tools/scripts/viv_utils.tcl       | 5 ++++-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/fpga/usrp3/tools/scripts/viv_generate_ip.tcl b/fpga/usrp3/tools/scripts/viv_generate_ip.tcl
+index 491b3b307..7ed1e44db 100644
+--- a/fpga/usrp3/tools/scripts/viv_generate_ip.tcl
++++ b/fpga/usrp3/tools/scripts/viv_generate_ip.tcl
+@@ -21,6 +21,11 @@ create_project -part $part_name -in_memory -ip
+ set_property target_simulator XSim [current_project]
+ add_files -norecurse -force $xci_file
+ upgrade_ip [get_ips $ip_name]
++# Disable OOC synthesis checkpoint so generate_target all does not trigger synthesis.
++# Vivado 2024.2 exits non-zero for some IPs (e.g. complex_to_magphase) when OOC synthesis
++# runs, even with 0 errors.  The main design synthesis uses inline synthesis from the
++# generated stubs instead of pre-built DCPs.
++set_property generate_synth_checkpoint false [get_files $xci_file]
+ reset_target all [get_files $xci_file]
+ puts "BUILDER: Generating IP Target..."
+ generate_target all [get_files $xci_file]
+diff --git a/fpga/usrp3/tools/scripts/viv_utils.tcl b/fpga/usrp3/tools/scripts/viv_utils.tcl
+index 84a203082..b9c313ad8 100644
+--- a/fpga/usrp3/tools/scripts/viv_utils.tcl
++++ b/fpga/usrp3/tools/scripts/viv_utils.tcl
+@@ -111,7 +111,10 @@ proc ::vivado_utils::initialize_project { {save_to_disk 0} } {
+         } elseif [expr [lsearch {.xci} $src_ext] >= 0] {
+             puts "BUILDER: Adding IP: $src_file"
+             read_ip $src_file
+-            if {[catch {set_property generate_synth_checkpoint true [get_files $src_file]} errorstring]} {
++            # Use false: no pre-built DCPs (SYNTH_IP=0 globally), so force inline synthesis.
++            # This also avoids Vivado 2024.2 failures where clk_wiz IPs moved from their
++            # original location cannot be resolved when generate_synth_checkpoint is true.
++            if {[catch {set_property generate_synth_checkpoint false [get_files $src_file]} errorstring]} {
+                 puts "BUILDER: Failed to set synth checkpoint generation ($errorstring). The process will continue."
+             }
+         } elseif [expr [lsearch {.ngc .edif .edf} $src_ext] >= 0] {
+-- 
+2.34.1
+
