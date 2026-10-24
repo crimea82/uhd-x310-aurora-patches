@@ -1,0 +1,41 @@
+From 12a94c63334c1e213137b7599594d489e652bbf3 Mon Sep 17 00:00:00 2001
+From: yuriy <crimea82@protonmail.com>
+Date: Fri, 23 Oct 2026 19:51:59 -0400
+Subject: [PATCH] fpga: viv_generate_ip: catch synth_ip failures from Vivado
+ 2024.2
+
+Vivado 2024.2 OOC synthesis exits non-zero for some IPs (notably xfft
+v9.1 after upgrade_ip) despite completing all synthesis phases with 0
+errors and no written DCP.  Wrap synth_ip in catch so the script
+continues to write the output cookie; the main design synthesis will
+fall back to inline synthesis when no pre-synthesized DCP is present.
+This mirrors the existing catch already used for open_example_project.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+---
+ fpga/usrp3/tools/scripts/viv_generate_ip.tcl | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/fpga/usrp3/tools/scripts/viv_generate_ip.tcl b/fpga/usrp3/tools/scripts/viv_generate_ip.tcl
+index 19681b58b..491b3b307 100644
+--- a/fpga/usrp3/tools/scripts/viv_generate_ip.tcl
++++ b/fpga/usrp3/tools/scripts/viv_generate_ip.tcl
+@@ -26,7 +26,14 @@ puts "BUILDER: Generating IP Target..."
+ generate_target all [get_files $xci_file]
+ if [string match $synth_ip "1"] {
+     puts "BUILDER: Synthesizing IP Target..."
+-    synth_ip [get_ips $ip_name]
++    # Use catch: Vivado 2024.2 OOC synthesis exits non-zero for some IPs (e.g. xfft
++    # v9.1 after upgrade_ip) despite completing all phases with 0 errors.  The
++    # synthesis stub (synth/<ip>.vhd) is already present from generate_target; the
++    # main design synthesis will use inline synthesis if no DCP is available.
++    if [catch {synth_ip [get_ips $ip_name]} synth_err] {
++        puts "WARNING: BUILDER: synth_ip for $ip_name failed: $synth_err"
++        puts "WARNING: BUILDER: Continuing without pre-synthesized DCP."
++    }
+ }
+ # Check for errors from the main IP generation before opening the example project
+ if { [get_msg_config -count -severity ERROR] > 0 } {
+-- 
+2.34.1
+
