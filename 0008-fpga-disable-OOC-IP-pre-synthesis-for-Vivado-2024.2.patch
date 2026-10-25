@@ -1,5 +1,5 @@
 From 10099895d670b31053f4be95397a411a1e6661a8 Mon Sep 17 00:00:00 2001
-From: yuriy <crimea82@protonmail.com>
+From: crimea82 <crimea82@protonmail.com>
 Date: Fri, 23 Oct 2026 20:22:29 -0400
 Subject: [PATCH] fpga: disable OOC IP pre-synthesis for Vivado 2024.2
 

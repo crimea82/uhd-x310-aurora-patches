@@ -1,5 +1,5 @@
 From 9a3306cbdc8877f544a55ee6c7962c974c5b2a60 Mon Sep 17 00:00:00 2001
-From: yuriy <crimea82@protonmail.com>
+From: crimea82 <crimea82@protonmail.com>
 Date: Fri, 23 Oct 2026 21:09:44 -0400
 Subject: [PATCH] fpga: disable OOC synthesis via generate_synth_checkpoint
  false
