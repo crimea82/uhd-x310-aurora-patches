@@ -18,6 +18,11 @@ block for the X310. Ported from the X410 in-tree implementation.
   `generate_target` to unlock IPs built with an older Vivado catalog; use explicit
   targets instead of `all` when `SYNTH_IP=0` to avoid triggering OOC synthesis
   subprocesses for complex IPs (e.g. xfft) in Vivado 2024.2
+- `host/lib/utils/paths.cpp`: resolve symlinks before deriving the install
+  prefix from the location of `libuhd.so`. On RHEL/Fedora-style systems
+  `/lib64` is a symlink to `/usr/lib64`, so a `/usr`-prefixed install (e.g. an
+  RPM) otherwise computes its package data path as `/share/uhd` and
+  `rfnoc_image_builder`, `modules.d` loading and image lookup break
 
 ## Usage
 
