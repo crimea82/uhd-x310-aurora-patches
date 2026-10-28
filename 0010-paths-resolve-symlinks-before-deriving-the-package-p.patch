@@ -1,0 +1,44 @@
+From 1a11bf337493f6720ed5db0f73d22095196c5111 Mon Sep 17 00:00:00 2001
+From: crimea82 <crimea82@protonmail.com>
+Date: Wed, 28 Oct 2026 09:52:17 -0400
+Subject: [PATCH] paths: resolve symlinks before deriving the package path from
+ libuhd
+
+get_lib_path() takes the location of libuhd.so as reported by the dynamic
+loader and get_pkg_path() uses its grandparent as the install prefix. On
+RHEL/Fedora-style systems /lib64 is a symlink to /usr/lib64 and the loader
+reports /lib64/libuhd.so.4.10.0, so the derived prefix is "/" and
+get_pkg_data_path() returns /share/uhd instead of /usr/share/uhd. This
+breaks rfnoc_image_builder, module loading via modules.d and image lookup
+for a /usr-prefixed install (e.g. an RPM).
+
+Canonicalize the library path first so the derived prefix matches the real
+install location. Falls back to the raw path if canonicalization fails.
+---
+ host/lib/utils/paths.cpp | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/host/lib/utils/paths.cpp b/host/lib/utils/paths.cpp
+index 0863a5c6c..b9c2523a0 100644
+--- a/host/lib/utils/paths.cpp
++++ b/host/lib/utils/paths.cpp
+@@ -284,6 +284,16 @@ std::string uhd::get_pkg_data_path()
+ std::string uhd::get_lib_path(void)
+ {
+     fs::path runtime_libfile_path{boost::dll::this_line_location().string()};
++    // Resolve symlinks first: on distributions where /lib64 is a symlink to
++    // /usr/lib64 (RHEL/Fedora "UsrMove"), the dynamic loader reports the
++    // library as /lib64/libuhd.so, and deriving the package path from that
++    // yields "/" instead of "/usr" (so e.g. get_pkg_data_path() becomes
++    // /share/uhd). The canonical path is relative to the real install prefix.
++    std::error_code ec;
++    const fs::path canonical_path = fs::canonical(runtime_libfile_path, ec);
++    if (!ec) {
++        runtime_libfile_path = canonical_path;
++    }
+     // Normalize before decomposing path so result is reliable
+     fs::path lib_path = runtime_libfile_path.lexically_normal().parent_path();
+     return lib_path.string();
+-- 
+2.34.1
+
